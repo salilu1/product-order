@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model category {
+  id          String          @id
+  name        String
+  slug        String          @unique(map: "Category_slug_key")
+  description String?
+  status      category_status @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+  product     product[]
+
+  @@index([slug], map: "Category_slug_idx")
+}
+
+model order {
+  id        String       @id
+  userId    String
+  status    order_status @default(PENDING)
+  createdAt DateTime     @default(now())
+  user      user         @relation(fields: [userId], references: [id], map: "Order_userId_fkey")
+  orderitem orderitem[]
+
+  @@index([status], map: "Order_status_idx")
+  @@index([userId], map: "Order_userId_idx")
+}
+
+model orderitem {
+  id        String  @id
+  orderId   String
+  productId String
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+  order     order   @relation(fields: [orderId], references: [id], map: "OrderItem_orderId_fkey")
+  product   product @relation(fields: [productId], references: [id], map: "OrderItem_productId_fkey")
+
+  @@index([orderId], map: "OrderItem_orderId_idx")
+  @@index([productId], map: "OrderItem_productId_idx")
+}
+
+model product {
+  id          String         @id
+  name        String
+  description String
+  price       Decimal        @db.Decimal(10, 2)
+  stock       Int
+  imageUrl    String
+  status      product_status @default(ACTIVE)
+  categoryId  String
+  createdAt   DateTime       @default(now())
+  orderitem   orderitem[]
+  category    category       @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
+
+  @@index([categoryId], map: "Product_categoryId_idx")
+  @@index([status], map: "Product_status_idx")
+}
+
+model user {
+  id        String    @id
+  email     String    @unique(map: "User_email_key")
+  password  String
+  role      user_role @default(USER)
+  createdAt DateTime  @default(now())
+  order     order[]
+
+  @@index([email], map: "User_email_idx")
+}
+
+enum order_status {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum user_role {
+  ADMIN
+  USER
+}
+
+enum category_status {
+  ACTIVE
+  INACTIVE
+}
+
+enum product_status {
+  ACTIVE
+  INACTIVE
+}
