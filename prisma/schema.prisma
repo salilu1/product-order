@@ -8,7 +8,7 @@ datasource db {
 }
 
 model category {
-  id          String          @id
+  id          String          @id @default(uuid())
   name        String
   slug        String          @unique(map: "Category_slug_key")
   description String?
@@ -20,19 +20,19 @@ model category {
 }
 
 model order {
-  id        String       @id
+  id        String       @id @default(uuid())
   userId    String
   status    order_status @default(PENDING)
   createdAt DateTime     @default(now())
   user      user         @relation(fields: [userId], references: [id], map: "Order_userId_fkey")
-  orderitem orderitem[]
+  items     orderitem[]  // rename from `orderitem` to `items` for readability
 
   @@index([status], map: "Order_status_idx")
   @@index([userId], map: "Order_userId_idx")
 }
 
 model orderitem {
-  id        String  @id
+  id        String  @id @default(uuid())
   orderId   String
   productId String
   quantity  Int
@@ -45,7 +45,7 @@ model orderitem {
 }
 
 model product {
-  id          String         @id
+  id          String         @id @default(uuid())
   name        String
   description String
   price       Decimal        @db.Decimal(10, 2)
@@ -61,8 +61,9 @@ model product {
   @@index([status], map: "Product_status_idx")
 }
 
+
 model user {
-  id        String    @id
+  id        String   @id @default(uuid())
   email     String    @unique(map: "User_email_key")
   password  String
   role      user_role @default(USER)
