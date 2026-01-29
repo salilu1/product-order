@@ -4,11 +4,13 @@ import { updateProductSchema } from "@/lib/validators/product";
 import { IncomingForm } from "formidable";
 import fs from "fs";
 import path from "path";
+import { requireAuth } from "@/lib/rbac";
 
 export const config = { api: { bodyParser: false } };
 
 type Params = { params: { id: string } };
 
+// GET single product
 export async function GET(_: Request, { params }: Params) {
   const product = await prisma.product.findUnique({
     where: { id: params.id },
@@ -22,13 +24,19 @@ export async function GET(_: Request, { params }: Params) {
   return NextResponse.json(product);
 }
 
+// PUT update product (Admin only)
 export async function PUT(req: Request, { params }: Params) {
+  const auth = await requireAuth("ADMIN");
+  if (auth instanceof NextResponse) return auth;
+
   const form = new IncomingForm({ multiples: false });
 
   return new Promise((resolve) => {
     form.parse(req as any, async (err, fields, files) => {
       if (err) {
-        return resolve(NextResponse.json({ error: "Upload failed" }, { status: 400 }));
+        return resolve(
+          NextResponse.json({ error: "Upload failed" }, { status: 400 })
+        );
       }
 
       try {
@@ -61,21 +69,28 @@ export async function PUT(req: Request, { params }: Params) {
           (data as any).imageUrl = `/uploads/${filename}`;
         }
 
-        const product = await prisma.product.update({
+        const updatedProduct = await prisma.product.update({
           where: { id: params.id },
           data,
+          include: { category: true },
         });
 
-        resolve(NextResponse.json(product));
+        resolve(NextResponse.json(updatedProduct));
       } catch (e) {
         console.error(e);
-        resolve(NextResponse.json({ error: "Update failed" }, { status: 400 }));
+        resolve(
+          NextResponse.json({ error: "Update failed" }, { status: 400 })
+        );
       }
     });
   });
 }
 
+// DELETE product (Admin only)
 export async function DELETE(_: Request, { params }: Params) {
+  const auth = await requireAuth("ADMIN");
+  if (auth instanceof NextResponse) return auth;
+
   await prisma.product.delete({ where: { id: params.id } });
   return NextResponse.json({ message: "Product deleted" });
 }

@@ -2,42 +2,59 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+
+    const form = e.currentTarget;
+    const email = (form.email as HTMLInputElement).value;
+    const password = (form.password as HTMLInputElement).value;
+
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (res?.error) {
+      console.log("NextAuth Response:", res);
+      setError("Invalid credentials");
+    } else {
+      router.push("/");
+    }
+  }
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1>Login</h1>
+    <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-4">
+      <h1 className="text-2xl font-bold">Login</h1>
+
+      {error && <p className="text-red-500">{error}</p>}
 
       <input
-        placeholder="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        name="email"
+        type="email"
+        required
+        placeholder="Email"
+        className="input"
       />
-      <br />
 
       <input
+        name="password"
         type="password"
-        placeholder="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        required
+        placeholder="Password"
+        className="input"
       />
-      <br />
 
-      <button
-        onClick={() =>
-          signIn("credentials", {
-            email,
-            password,
-            redirect: true,
-            callbackUrl: "/dashboard",
-          })
-        }
-      >
+      <button className="bg-blue-600 text-white px-4 py-2 rounded">
         Login
       </button>
-    </div>
+    </form>
   );
 }
