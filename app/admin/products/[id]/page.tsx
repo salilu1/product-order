@@ -26,7 +26,7 @@ export default function EditProduct() {
       setStock(prod.stock);
       setCategoryId(prod.categoryId);
 
-      const catRes = await fetch("/api/admin/categories");
+      const catRes = await fetch("/api/admin/catagories");
       const catData = await catRes.json();
       setCategories(catData);
     }

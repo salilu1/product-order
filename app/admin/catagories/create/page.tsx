@@ -12,14 +12,14 @@ export default function CreateCategory() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    const res = await fetch("/api/admin/categories", {
+    const res = await fetch("/api/admin/catagories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, description, status }),
     });
 
     if (!res.ok) return alert("Failed to create category");
-    router.push("/admin/categories");
+    router.push("/admin/catagories");
   };
 
   return (

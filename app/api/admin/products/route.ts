@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createProductSchema } from "@/lib/validators/product";
-import { IncomingForm } from "formidable";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { requireAuth } from "@/lib/rbac";
 
-// Disable body parser for file upload
-export const config = {
-  api: { bodyParser: false },
-};
 
 // 🔓 Optional: Admin product list
 export async function GET() {
@@ -23,80 +18,69 @@ export async function GET() {
 
 // 🔐 Admin only
 export async function POST(req: Request) {
-  // 🔒 RBAC CHECK FIRST
   const auth = await requireAuth("ADMIN");
   if (auth instanceof NextResponse) return auth;
 
-  const form = new IncomingForm({ multiples: false });
+  try {
+    // 2. Use native formData() instead of formidable
+    const formData = await req.formData();
+    
+    // Extract fields
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const price = Number(formData.get("price"));
+    const stock = Number(formData.get("stock"));
+    const categoryId = formData.get("categoryId") as string;
+    const image = formData.get("image") as File;
 
-  return new Promise((resolve) => {
-    form.parse(req as any, async (err, fields, files) => {
-      if (err) {
-        return resolve(
-          NextResponse.json({ error: "Upload failed" }, { status: 400 })
-        );
-      }
-
-      try {
-        const data = createProductSchema.parse({
-          ...fields,
-          price: Number(fields.price),
-          stock: Number(fields.stock),
-        });
-
-        // ✅ Ensure category is ACTIVE
-        const category = await prisma.category.findFirst({
-          where: {
-            id: data.categoryId,
-            status: "ACTIVE",
-          },
-        });
-
-        if (!category) {
-          return resolve(
-            NextResponse.json(
-              { error: "Category is inactive or not found" },
-              { status: 400 }
-            )
-          );
-        }
-
-        // 🖼 Image upload
-        const imageFile = files.image as any;
-        if (!imageFile) {
-          return resolve(
-            NextResponse.json(
-              { error: "Image file is required" },
-              { status: 400 }
-            )
-          );
-        }
-
-        const uploadsDir = path.join(process.cwd(), "public/uploads");
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
-        const filename = `${Date.now()}_${imageFile.originalFilename}`;
-        const filePath = path.join(uploadsDir, filename);
-
-        fs.copyFileSync(imageFile.filepath, filePath);
-
-        // 📦 Create product
-        const product = await prisma.product.create({
-          data: {
-            ...data,
-            imageUrl: `/uploads/${filename}`,
-          },
-        });
-
-        resolve(NextResponse.json(product, { status: 201 }));
-      } catch (e) {
-        console.error(e);
-        resolve(
-          NextResponse.json({ error: "Invalid input" }, { status: 400 })
-        );
-      }
+    // 3. Validate with Zod
+    const data = createProductSchema.parse({
+      name,
+      description,
+      price,
+      stock,
+      categoryId,
     });
-  });
+
+    const category = await prisma.category.findFirst({
+      where: { id: data.categoryId, status: "ACTIVE" },
+    });
+
+    if (!category) {
+      return NextResponse.json({ error: "Category is inactive or not found" }, { status: 400 });
+    }
+
+    if (!image || typeof image === "string") {
+      return NextResponse.json({ error: "Image file is required" }, { status: 400 });
+    }
+
+    // 4. Handle Image Saving
+    const uploadsDir = path.join(process.cwd(), "public/uploads");
+    try {
+      await fs.access(uploadsDir);
+    } catch {
+      await fs.mkdir(uploadsDir, { recursive: true });
+    }
+
+    const filename = `${Date.now()}_${image.name}`;
+    const filePath = path.join(uploadsDir, filename);
+    
+    // Convert File to Buffer and save
+    const bytes = await image.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await fs.writeFile(filePath, buffer);
+
+    // 5. Create Product
+    const product = await prisma.product.create({
+      data: {
+        ...data,
+        imageUrl: `/uploads/${filename}`,
+      },
+    });
+
+    return NextResponse.json(product, { status: 201 });
+  } catch (e: any) {
+    console.error("UPLOAD ERROR:", e);
+    return NextResponse.json({ error: e.message || "Invalid input" }, { status: 400 });
+  }
 }

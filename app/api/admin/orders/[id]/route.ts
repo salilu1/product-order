@@ -1,39 +1,35 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/rbac";
-import { z } from "zod";
 
-type Params = { params: { id: string } };
+const VALID_STATUSES = [
+  "PENDING",
+  "PROCESSING",
+  "COMPLETED",
+  "CANCELLED",
+];
 
-const updateOrderStatusSchema = z.object({
-  status: z.enum(["PENDING", "PROCESSING", "COMPLETED", "CANCELLED"]),
-});
-
-export async function PATCH(req: Request, { params }: Params) {
+// 🔐 ADMIN — Update order status
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   const auth = await requireAuth("ADMIN");
   if (auth instanceof NextResponse) return auth;
 
-  try {
-    const body = await req.json();
-    const { status } = updateOrderStatusSchema.parse(body);
+  const { status } = await req.json();
 
-    const order = await prisma.order.update({
-      where: { id: params.id },
-      data: { status },
-      include: {
-        items: {               // ✅ MATCHES SCHEMA
-          include: { product: true },
-        },
-        user: true,
-      },
-    });
-
-    return NextResponse.json(order);
-  } catch (error) {
-    console.error(error);
+  if (!VALID_STATUSES.includes(status)) {
     return NextResponse.json(
-      { error: "Failed to update order" },
+      { error: "Invalid status" },
       { status: 400 }
     );
   }
+
+  const order = await prisma.order.update({
+    where: { id: params.id },
+    data: { status },
+  });
+
+  return NextResponse.json(order);
 }

@@ -4,60 +4,82 @@ import { slugify } from "@/lib/slug";
 import { updateCategorySchema } from "@/lib/validators/catagory";
 import { requireAuth } from "@/lib/rbac";
 
-type Params = {
-  params: { id: string };
+// Corrected Type for Next.js 15/16
+type RouteProps = {
+  params: Promise<{ id: string }>;
 };
 
-// 🔐 ADMIN ONLY — Update category
-export async function PUT(req: Request, { params }: Params) {
+export async function GET(_: Request, { params }: RouteProps) {
   const auth = await requireAuth("ADMIN");
   if (auth instanceof NextResponse) return auth;
+
+  // 1. Await params
+  const { id } = await params; 
+
+  try {
+    const category = await prisma.category.findUnique({
+      where: { id },
+    });
+
+    if (!category) {
+      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(category);
+  } catch (error) {
+    console.error("GET CATEGORY ERROR:", error);
+    return NextResponse.json({ error: "Failed to fetch category" }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request, { params }: RouteProps) {
+  const auth = await requireAuth("ADMIN");
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
 
   try {
     const body = await req.json();
     const data = updateCategorySchema.parse(body);
 
     const updateData: any = { ...data };
-
-    if (data.name) {
-      updateData.slug = slugify(data.name);
-    }
+    if (data.name) updateData.slug = slugify(data.name);
 
     const category = await prisma.category.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
     });
 
     return NextResponse.json(category);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "Update failed" },
-      { status: 400 }
-    );
+    console.error("UPDATE CATEGORY ERROR:", error);
+    return NextResponse.json({ error: "Update failed" }, { status: 400 });
   }
 }
 
-// 🔐 ADMIN ONLY — Delete category
-export async function DELETE(_: Request, { params }: Params) {
+export async function DELETE(_: Request, { params }: RouteProps) {
   const auth = await requireAuth("ADMIN");
   if (auth instanceof NextResponse) return auth;
 
-  // ❗ Prevent deleting category with products
-  const productCount = await prisma.product.count({
-    where: { categoryId: params.id },
-  });
+  const { id } = await params;
 
-  if (productCount > 0) {
-    return NextResponse.json(
-      { error: "Category has products" },
-      { status: 409 }
-    );
+  try {
+    // Check for existing products
+    const productCount = await prisma.product.count({
+      where: { categoryId: id },
+    });
+
+    if (productCount > 0) {
+      return NextResponse.json(
+        { error: "Category has products. Delete or reassign them first." },
+        { status: 409 }
+      );
+    }
+
+    await prisma.category.delete({ where: { id } });
+    return NextResponse.json({ message: "Category deleted" });
+  } catch (error) {
+    console.error("DELETE CATEGORY ERROR:", error);
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 });
   }
-
-  await prisma.category.delete({
-    where: { id: params.id },
-  });
-
-  return NextResponse.json({ message: "Category deleted" });
 }

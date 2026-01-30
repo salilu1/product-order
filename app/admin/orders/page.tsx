@@ -1,15 +1,15 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/rbac";
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
-export default async function AdminOrders() {
+export default async function AdminOrdersPage() {
   const auth = await requireAuth("ADMIN");
   if (auth instanceof Response) return auth;
 
   const orders = await prisma.order.findMany({
     include: {
-      items: { include: { product: true } },
       user: true,
+      items: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -18,47 +18,49 @@ export default async function AdminOrders() {
     <div>
       <h1 className="text-2xl font-bold mb-4">Orders</h1>
 
-      <table className="w-full table-auto border-collapse">
-        <thead>
-          <tr className="bg-gray-200">
-            <th className="border p-2">Order ID</th>
-            <th className="border p-2">User</th>
-            <th className="border p-2">Items</th>
-            <th className="border p-2">Total</th>
-            <th className="border p-2">Status</th>
-            <th className="border p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((o) => {
-            const total = o.items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
-
-            return (
-              <tr key={o.id}>
-                <td className="border p-2">{o.id}</td>
-                <td className="border p-2">{o.user.email}</td>
-                <td className="border p-2">
-                  {o.items.map((i) => (
-                    <div key={i.id}>
-                      {i.product.name} x {i.quantity}
-                    </div>
-                  ))}
+      {orders.length === 0 ? (
+        <div className="border rounded p-6 text-gray-500">
+          No orders found.
+        </div>
+      ) : (
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border p-2">Order</th>
+              <th className="border p-2">User</th>
+              <th className="border p-2">Items</th>
+              <th className="border p-2">Status</th>
+              <th className="border p-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => (
+              <tr key={order.id}>
+                <td className="border p-2 font-mono text-sm">
+                  {order.id.slice(0, 8)}…
                 </td>
-                <td className="border p-2">${total.toFixed(2)}</td>
-                <td className="border p-2">{o.status}</td>
+                <td className="border p-2">
+                  {order.user.email}
+                </td>
+                <td className="border p-2">
+                  {order.items.length}
+                </td>
+                <td className="border p-2">
+                  {order.status}
+                </td>
                 <td className="border p-2">
                   <Link
-                    href={`/admin/orders/${o.id}`}
+                    href={`/admin/orders/${order.id}`}
                     className="text-blue-600 hover:underline"
                   >
-                    Update
+                    Manage
                   </Link>
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

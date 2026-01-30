@@ -1,26 +1,70 @@
-import { ReactNode } from "react";
-import Link from "next/link";
-import { requireAuth } from "@/lib/rbac";
+"use client";
 
-export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const auth = await requireAuth("ADMIN");
-  if (auth instanceof Response) return auth;
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import React from "react";
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  const navItems = [
+    { label: "Dashboard", href: "/admin" },
+    { label: "Products", href: "/admin/products" },
+    { label: "Categories", href: "/admin/catagories" },
+    { label: "Orders", href: "/admin/orders" },
+    { label: "Users", href: "/admin/users" },
+  ];
 
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen flex bg-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-800 text-white p-6">
-        <h1 className="text-xl font-bold mb-6">Admin Dashboard</h1>
-        <nav className="flex flex-col gap-3">
-          <Link href="/admin/products" className="hover:underline">Products</Link>
-          <Link href="/admin/categories" className="hover:underline">Categories</Link>
-          <Link href="/admin/orders" className="hover:underline">Orders</Link>
-          <Link href="/admin/users" className="hover:underline">Users</Link>
+      <aside className="w-64 bg-gray-900 text-gray-100 flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-gray-800">
+          <h1 className="text-xl font-bold tracking-wide">
+            Admin Panel
+          </h1>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-4 py-6 space-y-1">
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              pathname.startsWith(item.href + "/");
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`block rounded-md px-4 py-2 text-sm font-medium transition
+                  ${
+                    isActive
+                      ? "bg-gray-800 text-white"
+                      : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  }
+                `}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-800 text-xs text-gray-400">
+          © {new Date().getFullYear()} Admin
+        </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6 bg-gray-100">{children}</main>
+      <main className="flex-1 p-6 overflow-y-auto">
+        {children}
+      </main>
     </div>
   );
 }

@@ -3,9 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/rbac";
 import { createOrderSchema } from "@/lib/validators/order";
 
+// 🛒 CREATE ORDER — USER ONLY
 export async function POST(req: Request) {
-  const auth = await requireAuth("USER");
+  const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+
+  if (auth.user.role !== "USER") {
+    return NextResponse.json(
+      { error: "Only users can create orders" },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await req.json();
@@ -14,7 +22,10 @@ export async function POST(req: Request) {
     const productIds = items.map(i => i.productId);
 
     const products = await prisma.product.findMany({
-      where: { id: { in: productIds }, status: "ACTIVE" },
+      where: {
+        id: { in: productIds },
+        status: "ACTIVE",
+      },
     });
 
     if (products.length !== items.length) {
@@ -24,7 +35,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx) => {
       const orderItems = items.map(i => {
         const product = products.find(p => p.id === i.productId)!;
 
@@ -35,11 +46,10 @@ export async function POST(req: Request) {
         return {
           productId: product.id,
           quantity: i.quantity,
-          price: product.price,
+          price: product.price, // snapshot price
         };
       });
 
-      // ✅ USE `items`, NOT `orderitem`
       const order = await tx.order.create({
         data: {
           userId: auth.user.id,
@@ -60,10 +70,13 @@ export async function POST(req: Request) {
         });
       }
 
-      return NextResponse.json(order, { status: 201 });
+      return order;
     });
+
+    return NextResponse.json(order, { status: 201 });
+
   } catch (error: any) {
-    console.error(error);
+    console.error("ORDER CREATE ERROR:", error);
     return NextResponse.json(
       { error: error.message || "Order creation failed" },
       { status: 400 }
@@ -71,19 +84,24 @@ export async function POST(req: Request) {
   }
 }
 
+// 📦 GET MY ORDERS — USER ONLY
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  const isAdmin = auth.user.role === "ADMIN";
+  if (auth.user.role !== "USER") {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 403 }
+    );
+  }
 
   const orders = await prisma.order.findMany({
-    where: isAdmin ? {} : { userId: auth.user.id },
+    where: { userId: auth.user.id },
     include: {
       items: {
         include: { product: true },
       },
-      user: isAdmin,
     },
     orderBy: { createdAt: "desc" },
   });
