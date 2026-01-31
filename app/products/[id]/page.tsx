@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound} from "next/navigation";
 import Link from "next/link";
+import AddToCartSection from "./components/AddToCartSection"; // Make sure path is correct
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -21,10 +22,10 @@ export default async function ProductDetailPage({ params }: Props) {
   const relatedProducts = await prisma.product.findMany({
     where: {
       categoryId: product.categoryId,
-      id: { not: id }, // Exclude the product currently being viewed
+      id: { not: id },
       status: "ACTIVE" as any,
     },
-    take: 4, // Limit to 4 items
+    take: 4,
     orderBy: { createdAt: "desc" },
   });
 
@@ -32,7 +33,10 @@ export default async function ProductDetailPage({ params }: Props) {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
-      <Link href="/" className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-2 mb-8 transition-colors">
+      <Link
+        href="/"
+        className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-2 mb-8 transition-colors"
+      >
         ← Back to Shop
       </Link>
 
@@ -51,31 +55,45 @@ export default async function ProductDetailPage({ params }: Props) {
           <span className="text-blue-600 font-bold tracking-widest text-xs uppercase mb-2">
             {product.category.name}
           </span>
-          <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">{product.name}</h1>
-          
+          <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
+            {product.name}
+          </h1>
+
           <div className="text-3xl font-bold text-slate-900 mb-6">
             ${price.toFixed(2)}
           </div>
 
           <div className="prose prose-slate mb-8">
-            <h3 className="text-sm font-bold text-gray-400 uppercase mb-2">Description</h3>
+            <h3 className="text-sm font-bold text-gray-400 uppercase mb-2">
+              Description
+            </h3>
             <p className="text-gray-600 leading-relaxed text-lg">
               {product.description}
             </p>
           </div>
 
           <div className="flex items-center gap-4 py-6 border-t border-gray-100">
-            <div className={`px-4 py-1.5 rounded-full text-xs font-bold ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+            <div
+              className={`px-4 py-1.5 rounded-full text-xs font-bold ${
+                product.stock > 0
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {product.stock > 0
+                ? `In Stock (${product.stock})`
+                : "Out of Stock"}
             </div>
           </div>
 
-          <button 
-            disabled={product.stock === 0}
-            className="w-full md:w-max px-12 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-blue-600 disabled:bg-gray-300 transition-all shadow-xl shadow-slate-200 active:scale-95"
-          >
-            Add to Cart
-          </button>
+          {/* ✅ AddToCartSection with all required props */}
+          <AddToCartSection
+            productId={product.id}
+            name={product.name}
+            price={price}
+            stock={product.stock}
+            imageUrl={product.imageUrl}
+          />
         </div>
       </div>
 
@@ -84,10 +102,17 @@ export default async function ProductDetailPage({ params }: Props) {
         <section className="border-t border-gray-100 pt-16">
           <div className="flex justify-between items-end mb-8">
             <div>
-              <h2 className="text-2xl font-black text-slate-900">Related Products</h2>
-              <p className="text-gray-500">More from the {product.category.name} category</p>
+              <h2 className="text-2xl font-black text-slate-900">
+                Related Products
+              </h2>
+              <p className="text-gray-500">
+                More from the {product.category.name} category
+              </p>
             </div>
-            <Link href={`/?categoryId=${product.categoryId}`} className="text-sm font-bold text-blue-600 hover:underline">
+            <Link
+              href={`/?categoryId=${product.categoryId}`}
+              className="text-sm font-bold text-blue-600 hover:underline"
+            >
               View All
             </Link>
           </div>
@@ -96,10 +121,10 @@ export default async function ProductDetailPage({ params }: Props) {
             {relatedProducts.map((item) => (
               <Link key={item.id} href={`/products/${item.id}`} className="group">
                 <div className="aspect-square rounded-2xl overflow-hidden bg-gray-100 mb-4 border border-gray-50">
-                  <img 
-                    src={item.imageUrl} 
-                    alt={item.name} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                 </div>
                 <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors truncate">

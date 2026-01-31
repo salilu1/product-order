@@ -19,13 +19,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { items } = createOrderSchema.parse(body);
 
-    const productIds = items.map(i => i.productId);
+    const productIds = items.map((i) => i.productId);
 
     const products = await prisma.product.findMany({
-      where: {
-        id: { in: productIds },
-        status: "ACTIVE",
-      },
+      where: { id: { in: productIds }, status: "ACTIVE" },
     });
 
     if (products.length !== items.length) {
@@ -36,8 +33,8 @@ export async function POST(req: Request) {
     }
 
     const order = await prisma.$transaction(async (tx) => {
-      const orderItems = items.map(i => {
-        const product = products.find(p => p.id === i.productId)!;
+      const orderItems = items.map((i) => {
+        const product = products.find((p) => p.id === i.productId)!;
 
         if (i.quantity > product.stock) {
           throw new Error(`Insufficient stock for ${product.name}`);
@@ -46,7 +43,7 @@ export async function POST(req: Request) {
         return {
           productId: product.id,
           quantity: i.quantity,
-          price: product.price, // snapshot price
+          price: product.price,
         };
       });
 
@@ -56,9 +53,7 @@ export async function POST(req: Request) {
           items: { create: orderItems },
         },
         include: {
-          items: {
-            include: { product: true },
-          },
+          items: { include: { product: true } },
         },
       });
 
@@ -74,7 +69,6 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(order, { status: 201 });
-
   } catch (error: any) {
     console.error("ORDER CREATE ERROR:", error);
     return NextResponse.json(
@@ -84,27 +78,60 @@ export async function POST(req: Request) {
   }
 }
 
-// 📦 GET MY ORDERS — USER ONLY
+// 📦 GET ORDERS — USER: own orders; ADMIN: all orders
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  if (auth.user.role !== "USER") {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 403 }
-    );
-  }
+  const isAdmin = auth.user.role === "ADMIN";
 
   const orders = await prisma.order.findMany({
-    where: { userId: auth.user.id },
+    where: isAdmin ? {} : { userId: auth.user.id },
     include: {
-      items: {
-        include: { product: true },
-      },
+      items: { include: { product: true } },
+      user: isAdmin ? true : undefined, // include user info only for admin
     },
     orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(orders);
+}
+
+// ⚡ UPDATE ORDER STATUS — Admin or user cancel pending orders
+export async function PUT(req: Request) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
+  const body = await req.json();
+  const { orderId, status } = body;
+
+  const validStatuses = ["PENDING", "PROCESSING", "COMPLETED", "CANCELLED"];
+  if (!status || !validStatuses.includes(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  // USER restrictions
+  if (auth.user.role !== "ADMIN") {
+    if (order.userId !== auth.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+    if (status !== "CANCELLED" || order.status !== "PENDING") {
+      return NextResponse.json(
+        { error: "Cannot update this order" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { status },
+  });
+
+  return NextResponse.json(updated);
 }
