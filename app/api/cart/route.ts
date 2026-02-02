@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/rbac";
 
-// GET user's cart
+/* =========================
+   GET user's cart
+========================= */
 export async function GET() {
   const auth = await requireAuth("USER");
   if (auth instanceof NextResponse) return auth;
@@ -23,44 +25,59 @@ export async function GET() {
   return NextResponse.json(cart);
 }
 
-// POST add/update item in cart
+/* =========================
+   POST add item OR increment quantity
+========================= */
 export async function POST(req: Request) {
   const auth = await requireAuth("USER");
   if (auth instanceof NextResponse) return auth;
 
   const { productId, quantity } = await req.json();
 
-  // fetch product for price & validation
-  const product = await prisma.product.findUnique({ where: { id: productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+
   if (!product || product.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Product not found or inactive" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Product not found or inactive" },
+      { status: 404 }
+    );
   }
 
-  // create cart if not exists
-  let cart = await prisma.cart.findUnique({ where: { userId: auth.user.id } });
+  let cart = await prisma.cart.findUnique({
+    where: { userId: auth.user.id },
+  });
+
   if (!cart) {
-    cart = await prisma.cart.create({ data: { userId: auth.user.id } });
+    cart = await prisma.cart.create({
+      data: { userId: auth.user.id },
+    });
   }
 
-  // check if item exists in cart
   const existingItem = await prisma.cartItem.findUnique({
-    where: { cartId_productId: { cartId: cart.id, productId } },
+    where: {
+      cartId_productId: {
+        cartId: cart.id,
+        productId,
+      },
+    },
   });
 
   if (existingItem) {
-    // update quantity
     await prisma.cartItem.update({
       where: { id: existingItem.id },
-      data: { quantity: existingItem.quantity + quantity },
+      data: {
+        quantity: existingItem.quantity + quantity,
+      },
     });
   } else {
-    // create new cart item with price snapshot
     await prisma.cartItem.create({
       data: {
         cartId: cart.id,
         productId,
         quantity,
-        price: product.price,
+        price: product.price, // snapshot price
       },
     });
   }
@@ -73,17 +90,71 @@ export async function POST(req: Request) {
   return NextResponse.json(updatedCart);
 }
 
-// DELETE remove item from cart
+/* =========================
+   ✅ PUT update quantity (FIXES YOUR BUG)
+========================= */
+export async function PUT(req: Request) {
+  const auth = await requireAuth("USER");
+  if (auth instanceof NextResponse) return auth;
+
+  const { productId, quantity } = await req.json();
+
+  if (quantity < 1) {
+    return NextResponse.json(
+      { error: "Quantity must be at least 1" },
+      { status: 400 }
+    );
+  }
+
+  const cart = await prisma.cart.findUnique({
+    where: { userId: auth.user.id },
+  });
+
+  if (!cart) {
+    return NextResponse.json(
+      { error: "Cart not found" },
+      { status: 404 }
+    );
+  }
+
+  await prisma.cartItem.update({
+    where: {
+      cartId_productId: {
+        cartId: cart.id,
+        productId,
+      },
+    },
+    data: { quantity },
+  });
+
+  const updatedCart = await prisma.cart.findUnique({
+    where: { id: cart.id },
+    include: { items: { include: { product: true } } },
+  });
+
+  return NextResponse.json(updatedCart);
+}
+
+/* =========================
+   DELETE remove item
+========================= */
 export async function DELETE(req: Request) {
   const auth = await requireAuth("USER");
   if (auth instanceof NextResponse) return auth;
 
   const { productId } = await req.json();
 
-  const cart = await prisma.cart.findUnique({ where: { userId: auth.user.id } });
-  if (!cart) return NextResponse.json({ error: "Cart not found" }, { status: 404 });
+  const cart = await prisma.cart.findUnique({
+    where: { userId: auth.user.id },
+  });
 
-  // remove specific item
+  if (!cart) {
+    return NextResponse.json(
+      { error: "Cart not found" },
+      { status: 404 }
+    );
+  }
+
   await prisma.cartItem.deleteMany({
     where: { cartId: cart.id, productId },
   });

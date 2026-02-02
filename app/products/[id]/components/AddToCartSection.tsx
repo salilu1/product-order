@@ -19,10 +19,16 @@ export default function AddToCartSection({ productId, stock, name, price, imageU
   const [loading, setLoading] = useState(false);
 
   const isOutOfStock = stock === 0;
+  const isAdmin = session?.user?.role === "ADMIN"; // check if admin
 
   const handleAdd = async () => {
     if (!session) {
       signIn(); // redirect to login
+      return;
+    }
+
+    if (isAdmin) {
+      alert("Admins cannot add items to cart.");
       return;
     }
 
@@ -49,7 +55,7 @@ export default function AddToCartSection({ productId, stock, name, price, imageU
         <select
           value={qty}
           onChange={(e) => setQty(Number(e.target.value))}
-          disabled={isOutOfStock || loading}
+          disabled={isOutOfStock || loading || isAdmin}
           className="border rounded-lg px-3 py-2 text-sm"
         >
           {Array.from({ length: Math.min(stock, 10) }, (_, i) => i + 1).map((n) => (
@@ -63,18 +69,29 @@ export default function AddToCartSection({ productId, stock, name, price, imageU
       {/* Add to Cart Button */}
       <button
         onClick={handleAdd}
-        disabled={isOutOfStock || loading}
+        disabled={isOutOfStock || loading || isAdmin}
         className={`w-full md:w-max px-12 py-4 bg-slate-900 text-white rounded-2xl font-bold
                    hover:bg-blue-600 disabled:bg-gray-300 transition-all
                    shadow-xl shadow-slate-200 active:scale-95`}
       >
-        {loading ? "Adding..." : isOutOfStock ? "Out of Stock" : "Add to Cart"}
+        {loading
+          ? "Adding..."
+          : isOutOfStock
+          ? "Out of Stock"
+          : isAdmin
+          ? "Admins cannot add to cart"
+          : "Add to Cart"}
       </button>
 
-      {/* Login notice */}
+      {/* Notices */}
       {!session && (
         <p className="text-xs text-gray-500">
           You must be logged in to add items to cart
+        </p>
+      )}
+      {isAdmin && (
+        <p className="text-xs text-red-500 font-semibold">
+          Admins cannot add items to cart
         </p>
       )}
     </div>
