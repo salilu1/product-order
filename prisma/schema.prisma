@@ -26,7 +26,7 @@ model order {
   createdAt DateTime     @default(now())
   user      user         @relation(fields: [userId], references: [id], map: "Order_userId_fkey")
   items     orderitem[] // rename from `orderitem` to `items` for readability
-
+  payment   payment?
   @@index([status], map: "Order_status_idx")
   @@index([userId], map: "Order_userId_idx")
 }
@@ -71,6 +71,7 @@ model user {
 
   // BACK-RELATIONS
   order order[]
+  payments  payment[]
   cart  cart? // <-- add this
 }
 
@@ -98,6 +99,48 @@ model cartItem {
 
   @@unique([cartId, productId], name: "cartId_productId")
 }
+model payment {
+  id            String         @id @default(uuid())
+  orderId       String         @unique
+  userId        String
+  provider      payment_provider @default(CHAPA)
+
+  // Chapa identifiers
+  txRef         String         @unique
+  chapaTxnId    String?        // returned on verify (optional)
+  checkoutUrl   String?
+
+  // amounts
+  amount        Decimal        @db.Decimal(10, 2)
+  currency      String         @default("ETB")
+
+  // status tracking
+  status        payment_status @default(PENDING)
+
+  // raw response (optional but very useful)
+  chapaRaw      Json?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  order         order          @relation(fields: [orderId], references: [id])
+  user          user           @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "Payment_userId_idx")
+  @@index([status], map: "Payment_status_idx")
+}
+
+enum payment_status {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum payment_provider {
+  CHAPA
+}
+
 
 enum order_status {
   PENDING
