@@ -74,7 +74,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         {/* PRODUCT GRID */}
         <main className="flex-1">
           <div className="mb-8">
-            <h1 className="text-4xl font-black text-slate-900">Featured Store</h1>
+            <h1 className="text-4xl font-black text-blue-600">Featured Store</h1>
             <p className="text-gray-500 mt-1">Found {totalCount} items</p>
           </div>
 
