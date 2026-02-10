@@ -29,8 +29,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid total" }, { status: 400 });
     }
 
-    // 3) Create tx_ref
-    const txRef = `order_${order.id}_${Date.now()}`;
+    // 3) Create tx_ref (<= 50 chars)
+    const txRef = `ord_${order.id.slice(0, 8)}_${Date.now()}`;
 
     // 4) Create payment record
     const payment = await prisma.payment.create({
@@ -44,31 +44,48 @@ export async function POST(req: Request) {
       },
     });
 
-    // 5) Call Chapa initialize
-    const chapaRes = await fetch("https://api.chapa.co/v1/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`,
-        "Content-Type": "application/json",
+    // 5) Call Chapa initialize (with timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const chapaRes = await fetch(
+      "https://api.chapa.co/v1/transaction/initialize",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: total.toFixed(2),
+          currency: "ETB",
+          email: order.user.email,
+          first_name: "Customer",
+          last_name: "User",
+          tx_ref: txRef,
+
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/chapa/return?tx_ref=${txRef}`,
+        }),
+        signal: controller.signal,
       },
-      body: JSON.stringify({
-        amount: total.toFixed(2),
-        currency: "ETB",
-        email: order.user.email,
-        first_name: "Customer",
-        last_name: "User",
-        tx_ref: txRef,
+    );
 
-        // where Chapa redirects user after payment
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/chapa/return?tx_ref=${txRef}`,
+    clearTimeout(timeout);
 
-        // optional: webhook (we can add later)
-        // callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/chapa/webhook`,
-      }),
-    });
+    // 6) Read body ONCE
+    const chapaText = await chapaRes.text();
 
-    const chapaData = await chapaRes.json();
+    let chapaData: any = null;
+    try {
+      chapaData = chapaText ? JSON.parse(chapaText) : null;
+    } catch {
+      chapaData = { raw: chapaText };
+    }
 
+    console.log("CHAPA STATUS:", chapaRes.status);
+    console.log("CHAPA BODY:", chapaData);
+
+    // 7) Handle Chapa failure
     if (!chapaRes.ok) {
       await prisma.payment.update({
         where: { id: payment.id },
@@ -80,24 +97,43 @@ export async function POST(req: Request) {
 
       return NextResponse.json(
         { error: chapaData?.message || "Chapa initialize failed" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // 6) Save checkout url
+    // 8) Save checkout url
+    const checkoutUrl = chapaData?.data?.checkout_url;
+
+    if (!checkoutUrl) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "FAILED",
+          chapaRaw: chapaData,
+        },
+      });
+
+      return NextResponse.json(
+        { error: "Chapa did not return checkout_url" },
+        { status: 400 },
+      );
+    }
+
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        checkoutUrl: chapaData.data.checkout_url,
+        checkoutUrl,
         chapaRaw: chapaData,
       },
     });
 
-    return NextResponse.json({
-      checkoutUrl: chapaData.data.checkout_url,
-    });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+    return NextResponse.json({ checkoutUrl });
+  } catch (err: any) {
+    console.error("CHAPA INIT ERROR:", err);
+
+    return NextResponse.json(
+      { error: err.message || "Something went wrong" },
+      { status: 500 },
+    );
   }
 }
