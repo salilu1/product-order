@@ -1,66 +1,205 @@
-import { requireAuth } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/rbac";
 import Link from "next/link";
+import Image from "next/image";
+import { Package, ChevronRight, Calendar, Receipt } from "lucide-react";
+
+type OrderWithDetails = {
+  id: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "CANCELLED";
+  createdAt: Date;
+  user: { id: string; email: string };
+  items: {
+    id: string;
+    quantity: number;
+    price: number;
+    product: { id: string; name: string; imageUrl: string };
+  }[];
+  payments: {
+    id: string;
+    status: "PENDING" | "SUCCESS" | "FAILED";
+    amount: number;
+  }[];
+};
 
 export default async function AdminOrdersPage() {
   const auth = await requireAuth("ADMIN");
   if (auth instanceof Response) return auth;
 
-  const orders = await prisma.order.findMany({
+  const rawOrders = await prisma.order.findMany({
     include: {
       user: true,
-      items: true,
+      items: { include: { product: true } },
+      payments: true,
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Orders</h1>
+  const orders: OrderWithDetails[] = rawOrders.map((order) => ({
+    id: order.id,
+    status: order.status as any,
+    createdAt: order.createdAt,
+    user: { id: order.user.id, email: order.user.email },
+    items: order.items.map((item) => ({
+      id: item.id,
+      quantity: item.quantity,
+      price: Number(item.price),
+      product: {
+        id: item.product.id,
+        name: item.product.name,
+        imageUrl: item.product.imageUrl,
+      },
+    })),
+    payments: order.payments.map((p) => ({
+      id: p.id,
+      status: p.status as any,
+      amount: Number(p.amount),
+    })),
+  }));
 
-      {orders.length === 0 ? (
-        <div className="border rounded p-6 text-gray-500">
-          No orders found.
-        </div>
-      ) : (
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">Order</th>
-              <th className="border p-2">User</th>
-              <th className="border p-2">Items</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map(order => (
-              <tr key={order.id}>
-                <td className="border p-2 font-mono text-sm">
-                  {order.id.slice(0, 8)}…
-                </td>
-                <td className="border p-2">
-                  {order.user.email}
-                </td>
-                <td className="border p-2">
-                  {order.items.length}
-                </td>
-                <td className="border p-2">
-                  {order.status}
-                </td>
-                <td className="border p-2">
-                  <Link
-                    href={`/admin/orders/${order.id}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Manage
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+  const statusStyle = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
+        return "bg-emerald-50 text-emerald-700 border-emerald-100";
+      case "PROCESSING":
+        return "bg-blue-50 text-blue-700 border-blue-100";
+      case "CANCELLED":
+        return "bg-rose-50 text-rose-700 border-rose-100";
+      default:
+        return "bg-amber-50 text-amber-700 border-amber-100";
+    }
+  };
+
+  return (
+    <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-12 px-4">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-10 flex flex-col gap-2">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+            All Orders
+          </h1>
+          <p className="text-slate-500 font-medium">
+            View all orders with payment status and manage them.
+          </p>
+        </header>
+
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-[2rem] border border-dashed border-slate-300 py-20 text-center">
+            <Package className="mx-auto mb-5 text-slate-300" size={56} />
+            <p className="text-lg font-bold text-slate-600">No orders yet</p>
+            <p className="text-sm text-slate-400 mt-1">
+              There are currently no orders in the system.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {orders.map((order) => {
+              const totalPaid = order.payments
+                .filter((p) => p.status === "SUCCESS")
+                .reduce((sum, p) => sum + p.amount, 0);
+
+              const totalItems = order.items.reduce(
+                (sum, i) => sum + i.quantity,
+                0
+              );
+
+              return (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition"
+                >
+                  {/* Order Header */}
+                  <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/60 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div className="flex items-start gap-6">
+                      <div className="bg-blue-50 text-blue-600 rounded-xl p-3">
+                        <Receipt className="w-6 h-6" />
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                          Order
+                        </p>
+                        <p className="font-black text-slate-900">
+                          #{order.id.slice(0, 8)}
+                        </p>
+
+                        <div className="mt-2 flex items-center gap-3 text-sm text-slate-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Calendar size={14} />
+                            {new Date(order.createdAt).toLocaleDateString(
+                              undefined,
+                              { dateStyle: "medium" }
+                            )}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            {totalItems} item{totalItems > 1 && "s"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <span
+                        className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase border ${statusStyle(
+                          order.status
+                        )}`}
+                      >
+                        {order.status}
+                      </span>
+
+                      <p className="text-lg font-black text-slate-900">
+                        ${totalPaid.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Items Preview */}
+                  <div className="px-8 py-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {order.items.slice(0, 3).map((item) => (
+                        <div key={item.id} className="flex items-center gap-4">
+                          <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border">
+                            <Image
+                              src={item.product.imageUrl}
+                              alt={item.product.name}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 text-sm truncate">
+                              {item.product.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {item.quantity} × ${item.price.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 flex justify-between items-center">
+                      <p className="text-xs text-slate-400">
+                        {order.items.length > 3 &&
+                          `+${order.items.length - 3} more items`}
+                      </p>
+
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="inline-flex items-center gap-2 text-sm font-black text-blue-600 hover:text-blue-700 transition"
+                      >
+                        View Details
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

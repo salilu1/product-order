@@ -24,9 +24,12 @@ model order {
   userId    String
   status    order_status @default(PENDING)
   createdAt DateTime     @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   user      user         @relation(fields: [userId], references: [id], map: "Order_userId_fkey")
-  items     orderitem[] // rename from `orderitem` to `items` for readability
-  payment   payment?
+  items     orderitem[]
+  payments  payment[]
+
   @@index([status], map: "Order_status_idx")
   @@index([userId], map: "Order_userId_idx")
 }
@@ -37,6 +40,7 @@ model orderitem {
   productId String
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
+
   order     order   @relation(fields: [orderId], references: [id], map: "OrderItem_orderId_fkey")
   product   product @relation(fields: [productId], references: [id], map: "OrderItem_productId_fkey")
 
@@ -54,8 +58,9 @@ model product {
   status      product_status @default(ACTIVE)
   categoryId  String
   createdAt   DateTime       @default(now())
+
   orderitem   orderitem[]
-  cartItem    cartItem[] // <-- add this
+  cartItem    cartItem[]
   category    category       @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
 
   @@index([categoryId], map: "Product_categoryId_idx")
@@ -66,14 +71,18 @@ model user {
   id        String    @id @default(uuid())
   email     String    @unique
   password  String
+
+  firstName String?
+  lastName  String?
+
   role      user_role @default(USER)
   createdAt DateTime  @default(now())
 
-  // BACK-RELATIONS
-  order order[]
+  order     order[]
   payments  payment[]
-  cart  cart? // <-- add this
+  cart      cart?
 }
+
 
 model cart {
   id        String   @id @default(uuid())
@@ -81,9 +90,8 @@ model cart {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // RELATION FIELDS
-  user  user       @relation(fields: [userId], references: [id], map: "Cart_userId_fkey")
-  items cartItem[]
+  user      user       @relation(fields: [userId], references: [id], map: "Cart_userId_fkey")
+  items     cartItem[]
 
   @@index([userId], map: "Cart_userId_idx")
 }
@@ -94,38 +102,46 @@ model cartItem {
   productId String
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
+
   cart      cart    @relation(fields: [cartId], references: [id])
   product   product @relation(fields: [productId], references: [id])
 
   @@unique([cartId, productId], name: "cartId_productId")
 }
+
 model payment {
-  id            String         @id @default(uuid())
-  orderId       String         @unique
-  userId        String
-  provider      payment_provider @default(CHAPA)
+  id          String           @id @default(uuid())
+
+  // ✅ allow multiple payments per order (removed unique)
+  orderId     String
+  userId      String
+
+  provider    payment_provider @default(CHAPA)
 
   // Chapa identifiers
-  txRef         String         @unique
-  chapaTxnId    String?        // returned on verify (optional)
-  checkoutUrl   String?
+  txRef       String           @unique
+  chapaTxnId  String?
+  checkoutUrl String?
 
   // amounts
-  amount        Decimal        @db.Decimal(10, 2)
-  currency      String         @default("ETB")
+  amount      Decimal          @db.Decimal(10, 2)
+  currency    String           @default("ETB")
 
   // status tracking
   status        payment_status @default(PENDING)
+  failureReason String?
+  verifiedAt    DateTime?
 
   // raw response (optional but very useful)
-  chapaRaw      Json?
+  chapaRaw    Json?
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  order         order          @relation(fields: [orderId], references: [id])
-  user          user           @relation(fields: [userId], references: [id])
+  order       order            @relation(fields: [orderId], references: [id])
+  user        user             @relation(fields: [userId], references: [id])
 
+  @@index([orderId], map: "Payment_orderId_idx")
   @@index([userId], map: "Payment_userId_idx")
   @@index([status], map: "Payment_status_idx")
 }
@@ -141,13 +157,14 @@ enum payment_provider {
   CHAPA
 }
 
-
 enum order_status {
   PENDING
   PROCESSING
   COMPLETED
   CANCELLED
+  FAILED
 }
+
 
 enum user_role {
   ADMIN

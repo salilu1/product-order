@@ -17,10 +17,19 @@ export default function RegisterPage() {
 
     try {
       const form = e.currentTarget;
-      const email = (form.email as HTMLInputElement).value;
+
+      const firstName = (form.firstName as HTMLInputElement).value.trim();
+      const lastName = (form.lastName as HTMLInputElement).value.trim();
+      const email = (form.email as HTMLInputElement).value.trim();
       const password = (form.password as HTMLInputElement).value;
 
-      await axios.post("/api/register", { email, password });
+      await axios.post("/api/users/register", {
+        firstName,
+        lastName,
+        email,
+        password,
+      });
+
       router.push("/login");
     } catch (err: any) {
       setError(err?.response?.data?.message || "Registration failed");
@@ -50,7 +59,47 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Email Input */}
+            {/* First Name */}
+            <div className="relative">
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                required
+                placeholder=" "
+                className="peer block w-full px-5 pt-5 pb-2 text-gray-900 bg-transparent border-2 border-gray-200 rounded-2xl appearance-none focus:outline-none focus:border-blue-600 transition"
+              />
+              <label
+                htmlFor="firstName"
+                className="absolute left-5 top-2.5 text-gray-400 text-sm font-bold transition-all
+                  peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:top-2.5 peer-focus:text-sm peer-focus:text-blue-600 bg-white px-1"
+              >
+                First Name
+              </label>
+            </div>
+
+            {/* Last Name */}
+            <div className="relative">
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                required
+                placeholder=" "
+                className="peer block w-full px-5 pt-5 pb-2 text-gray-900 bg-transparent border-2 border-gray-200 rounded-2xl appearance-none focus:outline-none focus:border-blue-600 transition"
+              />
+              <label
+                htmlFor="lastName"
+                className="absolute left-5 top-2.5 text-gray-400 text-sm font-bold transition-all
+                  peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:top-2.5 peer-focus:text-sm peer-focus:text-blue-600 bg-white px-1"
+              >
+                Last Name
+              </label>
+            </div>
+
+            {/* Email */}
             <div className="relative">
               <input
                 id="email"
@@ -70,7 +119,7 @@ export default function RegisterPage() {
               </label>
             </div>
 
-            {/* Password Input */}
+            {/* Password */}
             <div className="relative">
               <input
                 id="password"
@@ -90,7 +139,7 @@ export default function RegisterPage() {
               </label>
             </div>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}

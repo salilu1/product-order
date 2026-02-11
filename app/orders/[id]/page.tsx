@@ -3,12 +3,12 @@ import { requireAuth } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import OrderClientActions from "./OrderClientActions";
-import {
-  Package,
-  Calendar,
-  User,
-  ArrowLeft,
-} from "lucide-react";
+import { Package, Calendar, User, ArrowLeft } from "lucide-react";
+
+// Inline helper for formatting numbers as currency
+function formatCurrency(amount: number) {
+  return `$${amount.toFixed(2)}`;
+}
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -17,14 +17,17 @@ type Props = {
 export default async function OrderDetailPage({ params }: Props) {
   const { id } = await params;
 
+  // Authenticate user
   const auth = await requireAuth();
   if (auth instanceof Response) redirect("/login");
 
+  // Fetch order with items, user, and payments
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
       items: { include: { product: true } },
       user: true,
+      payments: true,
     },
   });
 
@@ -32,17 +35,22 @@ export default async function OrderDetailPage({ params }: Props) {
 
   const isOwner = order.userId === auth.user.id;
   const isAdmin = auth.user.role === "ADMIN";
-
   if (!isOwner && !isAdmin) notFound();
 
+  // Total order amount
   const total = order.items.reduce(
     (sum, item) => sum + Number(item.price) * item.quantity,
     0
   );
 
+  // Total paid
+  const totalPaid = order.payments
+    .filter((p) => p.status === "SUCCESS")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
   return (
     <div className="max-w-5xl mx-auto py-12 px-6">
-      {/* Back to Orders */}
+      {/* Back Link */}
       <Link
         href="/orders"
         className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors mb-6"
@@ -59,9 +67,7 @@ export default async function OrderDetailPage({ params }: Props) {
           </h1>
           <p className="text-slate-500 font-medium mt-1">
             ID:{" "}
-            <span className="text-slate-900 select-all">
-              {order.id}
-            </span>
+            <span className="text-slate-900 select-all">{order.id}</span>
           </p>
         </div>
 
@@ -78,20 +84,19 @@ export default async function OrderDetailPage({ params }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Items */}
+          {/* Items Summary */}
           <section className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm">
             <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
               <Package className="w-5 h-5 text-blue-600" />
               Items Summary
             </h2>
-
             <div className="divide-y divide-slate-50">
               {order.items.map((item) => (
                 <div
                   key={item.id}
                   className="py-6 first:pt-0 last:pb-0 flex items-center gap-6"
                 >
-                  <div className="w-24 h-24 bg-slate-50 rounded-2xl overflow-hidden border border-slate-50 flex-shrink-0">
+                  <div className="w-24 h-24 bg-slate-50 rounded-2xl overflow-hidden border flex-shrink-0">
                     <img
                       src={item.product.imageUrl}
                       alt={item.product.name}
@@ -104,18 +109,14 @@ export default async function OrderDetailPage({ params }: Props) {
                       {item.product.name}
                     </h3>
                     <p className="text-slate-500 font-medium">
-                      {item.quantity} Unit
-                      {item.quantity > 1 ? "s" : ""} • $
-                      {Number(item.price).toFixed(2)} ea
+                      {item.quantity} Unit{item.quantity > 1 ? "s" : ""} •{" "}
+                      {formatCurrency(Number(item.price))} ea
                     </p>
                   </div>
 
                   <div className="text-right">
                     <p className="font-black text-slate-900 text-xl">
-                      $
-                      {(Number(item.price) * item.quantity).toFixed(
-                        2
-                      )}
+                      {formatCurrency(Number(item.price) * item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -129,6 +130,7 @@ export default async function OrderDetailPage({ params }: Props) {
             currentStatus={order.status}
             isAdmin={isAdmin}
             isOwner={isOwner}
+            payments={order.payments}
           />
         </div>
 
@@ -140,26 +142,38 @@ export default async function OrderDetailPage({ params }: Props) {
               Payment Summary
             </h2>
 
-            <div className="space-y-4">
-              <div className="flex justify-between text-slate-400">
-                <span>Subtotal</span>
-                <span>${total.toFixed(2)}</span>
-              </div>
+            {order.payments.length === 0 ? (
+              <p className="text-slate-400">No payment attempts yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {order.payments.map((p, idx) => (
+                  <div
+                    key={p.id}
+                    className="flex justify-between items-center bg-slate-800 p-3 rounded-xl"
+                  >
+                    <span className="font-medium">Payment #{idx + 1}</span>
+                    <span
+                      className={`px-3 py-1 text-xs font-bold rounded-full ${
+                        p.status === "SUCCESS"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : p.status === "FAILED"
+                          ? "bg-red-50 text-red-700"
+                          : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {p.status}
+                    </span>
+                  </div>
+                ))}
 
-              <div className="flex justify-between text-slate-400">
-                <span>Shipping</span>
-                <span className="text-green-400">
-                  Calculated at checkout
-                </span>
+                <div className="pt-4 mt-4 border-t border-slate-800 flex justify-between items-end">
+                  <span className="font-medium">Total Paid</span>
+                  <span className="text-3xl font-black text-blue-400">
+                    {formatCurrency(totalPaid)}
+                  </span>
+                </div>
               </div>
-
-              <div className="pt-4 mt-4 border-t border-slate-800 flex justify-between items-end">
-                <span className="font-medium">Total Paid</span>
-                <span className="text-3xl font-black text-blue-400">
-                  ${total.toFixed(2)}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Customer Info */}
@@ -169,9 +183,7 @@ export default async function OrderDetailPage({ params }: Props) {
               Customer Info
             </h2>
 
-            <p className="text-slate-500 text-sm">
-              {order.user.email}
-            </p>
+            <p className="text-slate-500 text-sm">{order.user.email}</p>
           </div>
         </aside>
       </div>

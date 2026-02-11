@@ -19,6 +19,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { items } = createOrderSchema.parse(body);
 
+    if (!items || items.length === 0) {
+      return NextResponse.json({ error: "No items provided" }, { status: 400 });
+    }
+
     const productIds = items.map((i) => i.productId);
 
     const products = await prisma.product.findMany({
@@ -32,41 +36,33 @@ export async function POST(req: Request) {
       );
     }
 
-    const order = await prisma.$transaction(async (tx) => {
-      const orderItems = items.map((i) => {
-        const product = products.find((p) => p.id === i.productId)!;
+    const order = await prisma.order.create({
+      data: {
+        userId: auth.user.id,
+        status: "PENDING",
+        items: {
+          create: items.map((i) => {
+            const product = products.find((p) => p.id === i.productId)!;
 
-        if (i.quantity > product.stock) {
-          throw new Error(`Insufficient stock for ${product.name}`);
-        }
+            if (i.quantity > product.stock) {
+              throw new Error(`Insufficient stock for ${product.name}`);
+            }
 
-        return {
-          productId: product.id,
-          quantity: i.quantity,
-          price: product.price,
-        };
-      });
-
-      const order = await tx.order.create({
-        data: {
-          userId: auth.user.id,
-          items: { create: orderItems },
+            return {
+              productId: product.id,
+              quantity: i.quantity,
+              price: product.price,
+            };
+          }),
         },
-        include: {
-          items: { include: { product: true } },
-        },
-      });
-
-      // decrement stock
-      for (const item of orderItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
-        });
-      }
-
-      return order;
+      },
+      include: {
+        items: { include: { product: true } },
+        payments: true,
+      },
     });
+
+    // ⚠️ Do NOT decrement stock yet — will happen after payment verification
 
     return NextResponse.json(order, { status: 201 });
   } catch (error: any) {
@@ -89,6 +85,7 @@ export async function GET() {
     where: isAdmin ? {} : { userId: auth.user.id },
     include: {
       items: { include: { product: true } },
+      payments: true, // include all payment attempts
       user: isAdmin ? true : undefined, // include user info only for admin
     },
     orderBy: { createdAt: "desc" },
@@ -103,14 +100,18 @@ export async function PUT(req: Request) {
   if (auth instanceof NextResponse) return auth;
 
   const body = await req.json();
-  const { orderId, status } = body;
+  const { orderId, status, reason } = body;
 
-  const validStatuses = ["PENDING", "PROCESSING", "COMPLETED", "CANCELLED"];
+  const validStatuses = ["PENDING", "PROCESSING", "COMPLETED", "CANCELLED", "FAILED"];
   if (!status || !validStatuses.includes(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { payments: true },
+  });
+
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
@@ -120,6 +121,7 @@ export async function PUT(req: Request) {
     if (order.userId !== auth.user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
+    // Users can only cancel PENDING orders
     if (status !== "CANCELLED" || order.status !== "PENDING") {
       return NextResponse.json(
         { error: "Cannot update this order" },
@@ -130,7 +132,11 @@ export async function PUT(req: Request) {
 
   const updated = await prisma.order.update({
     where: { id: orderId },
-    data: { status },
+    data: {
+      status,
+      // optional: store reason for FAILED or CANCELLED (admin only)
+      ...(auth.user.role === "ADMIN" && reason ? { reason } : {}),
+    },
   });
 
   return NextResponse.json(updated);

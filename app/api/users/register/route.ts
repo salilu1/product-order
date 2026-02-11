@@ -5,31 +5,50 @@ import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { email, password } = registerSchema.parse(body);
+  try {
+    const body = await req.json();
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
+    const { firstName, lastName, email, password } = registerSchema.parse(body);
 
-  if (existingUser) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { message: "Email already registered" },
+        { status: 409 }
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+      },
+    });
+
     return NextResponse.json(
-      { message: "Email already registered" },
-      { status: 409 }
+      { message: "User registered successfully" },
+      { status: 201 }
+    );
+  } catch (err: any) {
+    // Zod validation error
+    if (err?.name === "ZodError") {
+      return NextResponse.json(
+        { message: err.errors?.[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    console.error("REGISTER ERROR:", err);
+    return NextResponse.json(
+      { message: "Registration failed" },
+      { status: 500 }
     );
   }
-
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-    },
-  });
-
-  return NextResponse.json(
-    { message: "User registered successfully" },
-    { status: 201 }
-  );
 }
