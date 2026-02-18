@@ -9,7 +9,7 @@ export default function AboutPage() {
         className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors mb-8"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Shopping
+        Back to Shopping page
       </Link>
 
       <div className="bg-white border border-slate-100 rounded-[2rem] p-10 shadow-sm">
