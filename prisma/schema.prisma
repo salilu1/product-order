@@ -10,7 +10,6 @@ datasource db {
 model category {
   id          String          @id @default(uuid())
   name        String
-  product_nam String
   slug        String          @unique(map: "Category_slug_key")
   description String?
   status      category_status @default(ACTIVE)
@@ -72,6 +71,10 @@ model user {
   id        String    @id @default(uuid())
   email     String    @unique
   password  String
+
+  firstName String?
+  lastName  String?
+
   role      user_role @default(USER)
   createdAt DateTime  @default(now())
 
