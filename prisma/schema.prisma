@@ -10,6 +10,7 @@ datasource db {
 model category {
   id          String          @id @default(uuid())
   name        String
+  product_nam String
   slug        String          @unique(map: "Category_slug_key")
   description String?
   status      category_status @default(ACTIVE)
