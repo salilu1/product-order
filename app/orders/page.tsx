@@ -1,9 +1,10 @@
 import { requireAuth } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import RetryPaymentButton from "@/app/components/RetryPaymentButton";
 import Link from "next/link";
 import Image from "next/image";
 import { Package, ChevronRight, Calendar, Receipt } from "lucide-react";
-import { useState } from "react";
+// Import the new client component
 
 type OrderWithItems = {
   id: string;
@@ -68,30 +69,13 @@ export default async function OrdersPage() {
     }
   };
 
-  async function handleRetryPayment(orderId: string) {
-    try {
-      const res = await fetch("/api/payments/chapa/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Payment failed");
-      if (!data.checkoutUrl) throw new Error("Missing checkout URL");
-
-      window.location.href = data.checkoutUrl;
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || "Payment retry failed");
-    }
-  }
-
   return (
     <div className="bg-slate-50 min-h-[calc(100vh-4rem)] py-12 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <header className="mb-10 flex flex-col gap-2">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">My Orders</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+            My Orders
+          </h1>
           <p className="text-slate-500 font-medium">
             View your order history and track current purchases
           </p>
@@ -101,8 +85,9 @@ export default async function OrdersPage() {
           <div className="bg-white rounded-[2rem] border border-dashed border-slate-300 py-20 text-center">
             <Package className="mx-auto mb-5 text-slate-300" size={56} />
             <p className="text-lg font-bold text-slate-600">No orders yet</p>
-            <p className="text-sm text-slate-400 mt-1">Looks like you haven’t purchased anything</p>
-
+            <p className="text-sm text-slate-400 mt-1">
+              Looks like you haven’t purchased anything
+            </p>
             <Link
               href="/"
               className="inline-block mt-6 px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-sm hover:bg-blue-600 transition"
@@ -113,10 +98,15 @@ export default async function OrdersPage() {
         ) : (
           <div className="space-y-8">
             {orders.map((order) => {
-              const total = order.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-              const itemCount = order.items.reduce((sum, i) => sum + i.quantity, 0);
+              const total = order.items.reduce(
+                (sum, i) => sum + i.price * i.quantity,
+                0,
+              );
+              const itemCount = order.items.reduce(
+                (sum, i) => sum + i.quantity,
+                0,
+              );
 
-              // Latest payment for retry
               const latestPayment = order.payments[order.payments.length - 1];
 
               return (
@@ -124,70 +114,81 @@ export default async function OrdersPage() {
                   key={order.id}
                   className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition"
                 >
-                  {/* Order Header */}
                   <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/60 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div className="flex items-start gap-6">
                       <div className="bg-blue-50 text-blue-600 rounded-xl p-3">
                         <Receipt className="w-6 h-6" />
                       </div>
-
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-slate-400">
                           Order
                         </p>
-                        <p className="font-black text-slate-900">#{order.id.slice(0, 8)}</p>
-
+                        <p className="font-black text-slate-900">
+                          #{order.id.slice(0, 8)}
+                        </p>
                         <div className="mt-2 flex items-center gap-3 text-sm text-slate-500 font-medium">
                           <span className="flex items-center gap-1">
                             <Calendar size={14} />
-                            {new Date(order.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                            {new Date(order.createdAt).toLocaleDateString(
+                              undefined,
+                              { dateStyle: "medium" },
+                            )}
                           </span>
                           <span>•</span>
-                          <span>{itemCount} item{itemCount > 1 && "s"}</span>
+                          <span>
+                            {itemCount} item{itemCount > 1 && "s"}
+                          </span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <span className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase border ${statusStyle(order.status)}`}>
+                      <span
+                        className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase border ${statusStyle(order.status)}`}
+                      >
                         {order.status}
                       </span>
 
+                      {/* CLIENT COMPONENT USED HERE */}
                       {latestPayment && latestPayment.status === "FAILED" && (
-                        <button
-                          onClick={() => handleRetryPayment(order.id)}
-                          className="px-3 py-1.5 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition"
-                        >
-                          Retry Payment
-                        </button>
+                        <RetryPaymentButton orderId={order.id} />
                       )}
 
-                      <p className="text-lg font-black text-slate-900">${total.toFixed(2)}</p>
+                      <p className="text-lg font-black text-slate-900">
+                        ${total.toFixed(2)}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Items Preview */}
                   <div className="px-8 py-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                       {order.items.slice(0, 3).map((item) => (
                         <div key={item.id} className="flex items-center gap-4">
                           <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border">
-                            <Image src={item.product.imageUrl} alt={item.product.name} fill className="object-cover" />
+                            <Image
+                              src={item.product.imageUrl}
+                              alt={item.product.name}
+                              fill
+                              className="object-cover"
+                            />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900 text-sm truncate">{item.product.name}</p>
-                            <p className="text-xs text-slate-500">{item.quantity} × ${item.price.toFixed(2)}</p>
+                            <p className="font-bold text-slate-900 text-sm truncate">
+                              {item.product.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {item.quantity} × ${item.price.toFixed(2)}
+                            </p>
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    {/* Footer */}
                     <div className="mt-6 flex justify-between items-center">
                       <p className="text-xs text-slate-400">
-                        {order.items.length > 3 && `+${order.items.length - 3} more items`}
+                        {order.items.length > 3 &&
+                          `+${order.items.length - 3} more items`}
                       </p>
-
                       <Link
                         href={`/orders/${order.id}`}
                         className="inline-flex items-center gap-2 text-sm font-black text-blue-600 hover:text-blue-700 transition"
