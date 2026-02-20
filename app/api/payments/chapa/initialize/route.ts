@@ -65,6 +65,7 @@ export async function POST(req: Request) {
           tx_ref: txRef,
 
           return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/chapa/return?tx_ref=${txRef}`,
+          callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/chapa/webhook`,
         }),
         signal: controller.signal,
       },

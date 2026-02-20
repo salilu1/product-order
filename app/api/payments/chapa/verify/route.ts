@@ -42,7 +42,7 @@ export async function GET(req: Request) {
         headers: {
           Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`,
         },
-      }
+      },
     );
 
     const chapaData = await chapaRes.json();
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
     // 6) Validate amount
     const expectedTotal = payment.order.items.reduce(
       (sum, item) => sum + Number(item.price) * item.quantity,
-      0
+      0,
     );
 
     if (Math.abs(chapaAmount - expectedTotal) > 0.01) {
