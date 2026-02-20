@@ -17,10 +17,13 @@ export default function ChapaReturnPage() {
 
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
+    let attempts = 0;
 
     const checkStatus = async () => {
+      attempts++;
+
       try {
-        const res = await fetch(`/api/payment-status?tx_ref=${txRef}`);
+        const res = await fetch(`/api/payments/chapa/verify?tx_ref=${txRef}`);
         const data = await res.json();
 
         if (!isMounted) return;
@@ -28,19 +31,22 @@ export default function ChapaReturnPage() {
         if (data.status === "SUCCESS") {
           clearCart();
           router.replace(`/order/success?tx_ref=${txRef}`);
-          return; // Stop polling
+          return;
         }
 
         if (data.status === "FAILED") {
           setStatus("failed");
-          return; // Stop polling
+          return;
         }
 
-        // If still pending, schedule the next check in 2 seconds
-        timeoutId = setTimeout(checkStatus, 2000);
+        if (attempts < 15) {
+          // Retry after 2s
+          timeoutId = setTimeout(checkStatus, 2000);
+        } else {
+          setStatus("failed");
+        }
       } catch (err) {
         console.error(err);
-        // Even on error, try again after a delay
         timeoutId = setTimeout(checkStatus, 5000);
       }
     };
@@ -51,7 +57,7 @@ export default function ChapaReturnPage() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [txRef]); // Removed 'router' and 'clearCart' to prevent unnecessary resets
+  }, [txRef, router, clearCart]);
 
   if (!txRef) {
     return (

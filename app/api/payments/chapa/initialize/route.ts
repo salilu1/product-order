@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     // 5) Call Chapa initialize (with timeout)
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 100000);
 
     const chapaRes = await fetch(
       "https://api.chapa.co/v1/transaction/initialize",
@@ -65,7 +65,6 @@ export async function POST(req: Request) {
           tx_ref: txRef,
 
           return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/chapa/return?tx_ref=${txRef}`,
-          callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/chapa/webhook`,
         }),
         signal: controller.signal,
       },

@@ -2,14 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 
 interface Props {
-  // In Next.js 15, searchParams is a Promise
   searchParams: Promise<{
     tx_ref?: string;
   }>;
 }
 
 export default async function OrderSuccessPage({ searchParams }: Props) {
-  // 1. Unwrapping the Promise (Crucial for Next.js 15)
+  // 1️⃣ Resolve search params
   const resolvedParams = await searchParams;
   const txRef = resolvedParams.tx_ref;
 
@@ -17,30 +16,27 @@ export default async function OrderSuccessPage({ searchParams }: Props) {
     notFound();
   }
 
-  // 2. Fetch the payment record
+  // 2️⃣ Fetch payment + order + items + product
   const payment = await prisma.payment.findUnique({
     where: { txRef },
     include: {
       order: {
         include: {
           items: {
-            include: {
-              product: true,
-            },
+            include: { product: true },
           },
         },
       },
     },
   });
 
-  // 3. Handle specific states
   if (!payment) {
     notFound();
   }
 
-  // If the webhook is still processing, redirect back to the return page
-  // to let the poller finish. This prevents a "fake" 404 error.
+  // 3️⃣ Handle PENDING / FAILED
   if (payment.status === "PENDING") {
+    // Let the return page poll verify route
     redirect(`/payment/chapa/return?tx_ref=${txRef}`);
   }
 
