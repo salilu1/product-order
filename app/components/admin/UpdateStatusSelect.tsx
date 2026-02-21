@@ -12,13 +12,17 @@ const STATUS_OPTIONS = [
   "FAILED",
 ];
 
+interface UpdateStatusProps {
+  orderId: string;
+  currentStatus: string;
+  disabled?: boolean; // Correctly defined to fix ts(2322)
+}
+
 export default function UpdateStatusSelect({
   orderId,
   currentStatus,
-}: {
-  orderId: string;
-  currentStatus: string;
-}) {
+  disabled,
+}: UpdateStatusProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -27,8 +31,6 @@ export default function UpdateStatusSelect({
 
     setLoading(true);
     try {
-      // 1. Ensure the URL matches your file structure: /api/admin/orders/[id]
-      // 2. Ensure the Method is "PUT" to match your route.ts
       const res = await fetch(`/api/admin/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -56,10 +58,12 @@ export default function UpdateStatusSelect({
     <div className="relative flex items-center gap-2">
       {loading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
       <select
-        disabled={loading}
+        disabled={loading || disabled}
         value={currentStatus}
         onChange={(e) => handleStatusChange(e.target.value)}
-        className="bg-white border border-slate-200 text-slate-900 text-sm font-bold rounded-xl focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 outline-none disabled:opacity-50"
+        className={`bg-white border border-slate-200 text-slate-900 text-sm font-bold rounded-xl focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 outline-none transition-all
+          ${loading || disabled ? "opacity-50 cursor-not-allowed bg-slate-50 text-slate-400" : "opacity-100 cursor-pointer hover:border-blue-300"}
+        `}
       >
         {STATUS_OPTIONS.map((status) => (
           <option key={status} value={status}>
